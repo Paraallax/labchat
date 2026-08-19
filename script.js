@@ -1,10 +1,23 @@
-const SUPABASE_URL = "https://izobeyuplyramoojazdg.supabase.co";
-const SUPABASE_KEY = "sb_publishable_fftKRus4w4NXriH07kWvQg_Up9qWpy6";
+/* =========================================================
+   LABCHAT
+   Main Client Application
+========================================================= */
 
 
-/* ==========================================
-   SUPABASE
-========================================== */
+/* =========================================================
+   SUPABASE CONFIG
+========================================================= */
+
+const SUPABASE_URL =
+    "https://izobeyuplyramoojazdg.supabase.co";
+
+const SUPABASE_KEY =
+    "sb_publishable_fftKRus4w4NXriH07kWvQg_Up9qWpy6";
+
+
+/* =========================================================
+   SUPABASE CLIENT
+========================================================= */
 
 const supabaseClient =
     window.supabase.createClient(
@@ -13,25 +26,30 @@ const supabaseClient =
     );
 
 
-/* ==========================================
+/* =========================================================
    STATE
-========================================== */
+========================================================= */
 
 let currentUser = null;
+
 let currentProfile = null;
 
 let realtimeChannel = null;
+
 let presenceChannel = null;
+
+let isCodeMode = false;
 
 let userSessionId =
     crypto.randomUUID();
 
-let isCodeMode = false;
+
+/* =========================================================
+   DOM ELEMENTS
+========================================================= */
 
 
-/* ==========================================
-   DOM
-========================================== */
+/* ---------- Login ---------- */
 
 const loginOverlay =
     document.getElementById("loginOverlay");
@@ -62,6 +80,9 @@ const openLoginButton =
 
 const loginNotice =
     document.getElementById("loginNotice");
+
+
+/* ---------- Chat ---------- */
 
 const chatScreen =
     document.getElementById("chatScreen");
@@ -96,6 +117,9 @@ const codeIndicator =
 const leaveButton =
     document.getElementById("leaveButton");
 
+
+/* ---------- PDF ---------- */
+
 const pdfSection =
     document.getElementById("pdfSection");
 
@@ -109,9 +133,9 @@ const pdfButton =
     document.getElementById("pdfButton");
 
 
-/* ==========================================
+/* =========================================================
    INITIALIZATION
-========================================== */
+========================================================= */
 
 document.addEventListener(
     "DOMContentLoaded",
@@ -121,9 +145,19 @@ document.addEventListener(
 
 async function initializeLabChat() {
 
-    console.log("LabChat initializing...");
+    console.log(
+        "LabChat initializing..."
+    );
 
-    setStatus("Connecting...");
+
+    setStatus(
+        "Connecting..."
+    );
+
+
+    /*
+     * Set up UI controls first.
+     */
 
     setupLoginControls();
 
@@ -133,19 +167,42 @@ async function initializeLabChat() {
 
     disableChatControls();
 
+
+    /*
+     * IMPORTANT
+     *
+     * PDF is PUBLIC.
+     *
+     * Therefore load it BEFORE checking
+     * whether the user is logged in.
+     */
+
+    await loadActivePDF();
+
+
+    /*
+     * Restore Supabase authentication.
+     */
+
     await restoreSession();
 
+
+    console.log(
+        "LabChat initialization complete."
+    );
 }
 
 
-/* ==========================================
+/* =========================================================
    LOGIN CONTROLS
-========================================== */
+========================================================= */
 
 function setupLoginControls() {
 
 
-    /* LOGIN FORM */
+    /*
+     * Login form
+     */
 
     if (loginForm) {
 
@@ -157,7 +214,9 @@ function setupLoginControls() {
     }
 
 
-    /* CLOSE LOGIN */
+    /*
+     * Close button
+     */
 
     if (closeLoginButton) {
 
@@ -169,7 +228,9 @@ function setupLoginControls() {
     }
 
 
-    /* OPEN LOGIN */
+    /*
+     * Open login button
+     */
 
     if (openLoginButton) {
 
@@ -181,7 +242,9 @@ function setupLoginControls() {
     }
 
 
-    /* CLICK OUTSIDE MODAL */
+    /*
+     * Clicking outside modal closes login.
+     */
 
     if (loginOverlay) {
 
@@ -195,6 +258,7 @@ function setupLoginControls() {
                 ) {
 
                     closeLogin();
+
                 }
 
             }
@@ -205,9 +269,80 @@ function setupLoginControls() {
 }
 
 
-/* ==========================================
+/* =========================================================
+   MESSAGE CONTROLS
+========================================================= */
+
+function setupMessageControls() {
+
+
+    /*
+     * Message form
+     */
+
+    if (messageForm) {
+
+        messageForm.addEventListener(
+            "submit",
+            handleMessageSubmit
+        );
+
+    }
+
+
+    /*
+     * Message keyboard handling
+     */
+
+    if (messageInput) {
+
+        messageInput.addEventListener(
+            "keydown",
+            handleMessageKeydown
+        );
+
+
+        messageInput.addEventListener(
+            "input",
+            autoResizeTextarea
+        );
+
+    }
+
+
+    /*
+     * Code mode
+     */
+
+    if (codeButton) {
+
+        codeButton.addEventListener(
+            "click",
+            toggleCodeMode
+        );
+
+    }
+
+
+    /*
+     * Sign out
+     */
+
+    if (leaveButton) {
+
+        leaveButton.addEventListener(
+            "click",
+            leaveChat
+        );
+
+    }
+
+}
+
+
+/* =========================================================
    KEYBOARD SHORTCUTS
-========================================== */
+========================================================= */
 
 function setupKeyboardShortcuts() {
 
@@ -215,8 +350,10 @@ function setupKeyboardShortcuts() {
         "keydown",
         (event) => {
 
+
             /*
              * Ctrl + Shift + L
+             *
              * Open login
              */
 
@@ -236,6 +373,7 @@ function setupKeyboardShortcuts() {
 
             /*
              * Escape
+             *
              * Close login
              */
 
@@ -248,6 +386,7 @@ function setupKeyboardShortcuts() {
             ) {
 
                 closeLogin();
+
             }
 
         }
@@ -256,9 +395,9 @@ function setupKeyboardShortcuts() {
 }
 
 
-/* ==========================================
+/* =========================================================
    OPEN LOGIN
-========================================== */
+========================================================= */
 
 function openLogin() {
 
@@ -266,36 +405,41 @@ function openLogin() {
         return;
     }
 
+
     loginOverlay.classList.remove(
         "hidden"
     );
 
-    if (loginError) {
-        loginError.textContent = "";
-    }
+
+    clearLoginError();
+
 
     setTimeout(
         () => {
 
             if (loginIdentifier) {
+
                 loginIdentifier.focus();
+
             }
 
         },
         50
     );
+
 }
 
 
-/* ==========================================
+/* =========================================================
    CLOSE LOGIN
-========================================== */
+========================================================= */
 
 function closeLogin() {
 
     if (!loginOverlay) {
         return;
     }
+
 
     loginOverlay.classList.add(
         "hidden"
@@ -304,15 +448,24 @@ function closeLogin() {
 }
 
 
-/* ==========================================
+/* =========================================================
    LOGIN
-========================================== */
+========================================================= */
 
 async function handleLogin(event) {
 
     event.preventDefault();
 
-    if (!loginIdentifier || !loginPassword) {
+
+    if (
+        !loginIdentifier ||
+        !loginPassword
+    ) {
+
+        console.error(
+            "Login elements are missing."
+        );
+
         return;
     }
 
@@ -320,109 +473,157 @@ async function handleLogin(event) {
     const identifier =
         loginIdentifier.value.trim();
 
+
     const password =
         loginPassword.value;
 
 
-    if (!identifier || !password) {
+    if (
+        !identifier ||
+        !password
+    ) {
+
+        showLoginError(
+            "Please enter your email and password."
+        );
+
         return;
     }
 
 
     clearLoginError();
 
-    setLoginLoading(true);
+    setLoginLoading(
+        true
+    );
 
 
     /*
-     * Current database architecture:
-     *
-     * Supabase Auth uses email + password.
-     *
-     * The profiles table currently contains
-     * username / role / is_active, but no
-     * email column.
+     * Current architecture uses
+     * Supabase Auth email/password.
      */
 
-    if (!identifier.includes("@")) {
+    if (
+        !identifier.includes("@")
+    ) {
 
         showLoginError(
-            "Please use your Supabase Auth email. Username / ID login will be added separately."
+            "Please use your Supabase Auth email."
         );
 
-        setLoginLoading(false);
+        setLoginLoading(
+            false
+        );
 
         return;
     }
 
 
-    const {
-        data,
-        error
-    } =
-        await supabaseClient.auth.signInWithPassword(
-            {
-                email: identifier,
-                password: password
-            }
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient.auth
+                .signInWithPassword(
+                    {
+                        email:
+                            identifier,
+
+                        password:
+                            password
+                    }
+                );
+
+
+        if (error) {
+
+            console.error(
+                "Login error:",
+                error
+            );
+
+            showLoginError(
+                getLoginErrorMessage(
+                    error
+                )
+            );
+
+            setLoginLoading(
+                false
+            );
+
+            return;
+        }
+
+
+        if (
+            !data ||
+            !data.user
+        ) {
+
+            showLoginError(
+                "Login failed. Please try again."
+            );
+
+            setLoginLoading(
+                false
+            );
+
+            return;
+        }
+
+
+        const success =
+            await loadUserProfile(
+                data.user
+            );
+
+
+        if (!success) {
+
+            await supabaseClient.auth.signOut();
+
+            setLoginLoading(
+                false
+            );
+
+            return;
+        }
+
+
+        loginPassword.value = "";
+
+
+        setLoginLoading(
+            false
         );
 
 
-    if (error) {
+    } catch (error) {
 
         console.error(
-            "Login error:",
+            "Unexpected login error:",
             error
         );
 
         showLoginError(
-            getLoginErrorMessage(error)
+            "An unexpected error occurred."
         );
 
-        setLoginLoading(false);
-
-        return;
-    }
-
-
-    if (!data || !data.user) {
-
-        showLoginError(
-            "Login failed. Please try again."
+        setLoginLoading(
+            false
         );
 
-        setLoginLoading(false);
-
-        return;
     }
-
-
-    const success =
-        await loadUserProfile(
-            data.user
-        );
-
-
-    if (!success) {
-
-        await supabaseClient.auth.signOut();
-
-        setLoginLoading(false);
-
-        return;
-    }
-
-
-    loginPassword.value = "";
-
-    setLoginLoading(false);
 
 }
 
 
-/* ==========================================
-   RESTORE EXISTING SESSION
-========================================== */
+/* =========================================================
+   RESTORE SESSION
+========================================================= */
 
 async function restoreSession() {
 
@@ -432,7 +633,8 @@ async function restoreSession() {
             data,
             error
         } =
-            await supabaseClient.auth.getSession();
+            await supabaseClient.auth
+                .getSession();
 
 
         if (error) {
@@ -450,13 +652,32 @@ async function restoreSession() {
         }
 
 
-        if (!data.session) {
+        /*
+         * No existing session.
+         *
+         * This is completely normal.
+         *
+         * The public PDF should still be visible.
+         */
 
-            setStatus("Offline");
+        if (
+            !data ||
+            !data.session
+        ) {
+
+            setStatus(
+                "Signed out"
+            );
+
+            showGuestState();
 
             return;
         }
 
+
+        /*
+         * Existing session found.
+         */
 
         await loadUserProfile(
             data.session.user
@@ -479,12 +700,15 @@ async function restoreSession() {
 }
 
 
-/* ==========================================
+/* =========================================================
    AUTH STATE LISTENER
-========================================== */
+========================================================= */
 
 supabaseClient.auth.onAuthStateChange(
-    async (event, session) => {
+    async (
+        event,
+        session
+    ) => {
 
         console.log(
             "Auth event:",
@@ -493,7 +717,8 @@ supabaseClient.auth.onAuthStateChange(
 
 
         if (
-            event === "SIGNED_OUT"
+            event ===
+            "SIGNED_OUT"
         ) {
 
             await resetLabChat();
@@ -503,14 +728,25 @@ supabaseClient.auth.onAuthStateChange(
 
 
         if (
-            event === "SIGNED_IN" &&
-            session &&
-            !currentProfile
+            event ===
+            "SIGNED_IN" &&
+            session
         ) {
 
-            await loadUserProfile(
-                session.user
-            );
+            /*
+             * Don't load the profile twice
+             * if it is already loaded.
+             */
+
+            if (
+                !currentProfile
+            ) {
+
+                await loadUserProfile(
+                    session.user
+                );
+
+            }
 
         }
 
@@ -518,170 +754,264 @@ supabaseClient.auth.onAuthStateChange(
 );
 
 
-/* ==========================================
-   LOAD PROFILE
-========================================== */
+/* =========================================================
+   LOAD USER PROFILE
+========================================================= */
 
 async function loadUserProfile(user) {
 
     if (!user) {
+
         return false;
+
     }
 
 
-    const {
-        data,
-        error
-    } =
-        await supabaseClient
-            .from("profiles")
-            .select(
-                "id, username, role, is_active"
-            )
-            .eq(
-                "id",
-                user.id
-            )
-            .maybeSingle();
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient
+                .from("profiles")
+                .select(
+                    "id, username, role, is_active"
+                )
+                .eq(
+                    "id",
+                    user.id
+                )
+                .maybeSingle();
 
 
-    if (error) {
+        if (error) {
+
+            console.error(
+                "Profile load error:",
+                error
+            );
+
+            showLoginError(
+                "Could not load your profile."
+            );
+
+            return false;
+        }
+
+
+        if (!data) {
+
+            showLoginError(
+                "Your account does not have a LabChat profile."
+            );
+
+            return false;
+        }
+
+
+        /*
+         * Check account status.
+         */
+
+        if (
+            data.is_active !== true
+        ) {
+
+            showLoginError(
+                "Your LabChat account is inactive."
+            );
+
+            return false;
+        }
+
+
+        /*
+         * ADMIN
+         */
+
+        if (
+            data.role ===
+            "admin"
+        ) {
+
+            console.log(
+                "Admin login detected."
+            );
+
+
+            window.location.href =
+                "../admin/admin.html";
+
+
+            return true;
+        }
+
+
+        /*
+         * NORMAL USER
+         */
+
+        if (
+            data.role !==
+            "user"
+        ) {
+
+            showLoginError(
+                "Your account has an invalid role."
+            );
+
+            return false;
+        }
+
+
+        /*
+         * Save authenticated user.
+         */
+
+        currentUser =
+            user;
+
+        currentProfile =
+            data;
+
+
+        /*
+         * Update UI.
+         */
+
+        if (currentUserElement) {
+
+            currentUserElement.textContent =
+                data.username;
+
+        }
+
+
+        if (loginNotice) {
+
+            loginNotice.classList.add(
+                "hidden"
+            );
+
+        }
+
+
+        closeLogin();
+
+
+        /*
+         * Enable chat.
+         */
+
+        enableChatControls();
+
+
+        setStatus(
+            "Loading..."
+        );
+
+
+        /*
+         * Load chat data.
+         */
+
+        await loadMessages();
+
+        await loadActivePDF();
+
+        subscribeToMessages();
+
+        startPresence();
+
+
+        /*
+         * Focus message box.
+         */
+
+        if (messageInput) {
+
+            messageInput.focus();
+
+        }
+
+
+        console.log(
+            "LabChat user logged in:",
+            data.username
+        );
+
+
+        return true;
+
+
+    } catch (error) {
 
         console.error(
-            "Profile load error:",
+            "Profile error:",
             error
         );
 
         showLoginError(
-            "Could not load your profile. Check your profiles table permissions."
+            "Could not load your LabChat profile."
         );
 
         return false;
+
     }
 
+}
 
-    if (!data) {
 
-        showLoginError(
-            "Your account does not have a LabChat profile."
-        );
+/* =========================================================
+   GUEST STATE
+========================================================= */
 
-        return false;
+function showGuestState() {
+
+    currentUser =
+        null;
+
+    currentProfile =
+        null;
+
+
+    if (currentUserElement) {
+
+        currentUserElement.textContent =
+            "Guest";
+
     }
-
-
-    /*
-     * Account disabled
-     */
-
-    if (
-        data.is_active !== true
-    ) {
-
-        showLoginError(
-            "Your LabChat account is inactive. Contact an administrator."
-        );
-
-        return false;
-    }
-
-
-    /*
-     * ADMIN
-     */
-
-    if (
-        data.role === "admin"
-    ) {
-
-        console.log(
-            "Admin login detected."
-        );
-
-        /*
-         * Admin dashboard is one folder
-         * above labchat.
-         */
-
-        window.location.href =
-            "../admin/admin.html";
-
-        return true;
-    }
-
-
-    /*
-     * NORMAL USER
-     */
-
-    if (
-        data.role !== "user"
-    ) {
-
-        showLoginError(
-            "Your account has an invalid role."
-        );
-
-        return false;
-    }
-
-
-    currentUser = user;
-
-    currentProfile = data;
-
-
-    currentUserElement.textContent =
-        data.username;
-
-
-    closeLogin();
 
 
     if (loginNotice) {
 
-        loginNotice.classList.add(
+        loginNotice.classList.remove(
             "hidden"
         );
 
     }
 
 
-    enableChatControls();
-
-
-    setStatus("Online");
+    disableChatControls();
 
 
     /*
-     * Load application data
+     * IMPORTANT:
+     *
+     * We DO NOT hide the PDF here.
+     *
+     * PDF is public.
      */
 
-    await loadMessages();
+    loadActivePDF();
 
-    await loadActivePDF();
-
-    subscribeToMessages();
-
-    startPresence();
-
-
-    messageInput.focus();
-
-
-    console.log(
-        "LabChat user logged in:",
-        data.username
-    );
-
-
-    return true;
 }
 
 
-/* ==========================================
+/* =========================================================
    LOGIN ERROR
-========================================== */
+========================================================= */
 
 function showLoginError(message) {
 
@@ -689,10 +1019,16 @@ function showLoginError(message) {
         return;
     }
 
+
     loginError.textContent =
         message;
+
 }
 
+
+/* =========================================================
+   CLEAR LOGIN ERROR
+========================================================= */
 
 function clearLoginError() {
 
@@ -700,16 +1036,20 @@ function clearLoginError() {
         return;
     }
 
-    loginError.textContent = "";
+
+    loginError.textContent =
+        "";
 
 }
 
 
-/* ==========================================
+/* =========================================================
    LOGIN BUTTON STATE
-========================================== */
+========================================================= */
 
-function setLoginLoading(loading) {
+function setLoginLoading(
+    loading
+) {
 
     if (!loginButton) {
         return;
@@ -728,14 +1068,18 @@ function setLoginLoading(loading) {
 }
 
 
-/* ==========================================
-   LOGIN ERROR MESSAGES
-========================================== */
+/* =========================================================
+   LOGIN ERROR MESSAGE
+========================================================= */
 
-function getLoginErrorMessage(error) {
+function getLoginErrorMessage(
+    error
+) {
 
     if (!error) {
+
         return "Login failed.";
+
     }
 
 
@@ -743,62 +1087,87 @@ function getLoginErrorMessage(error) {
         error.message || "";
 
 
+    const lower =
+        message.toLowerCase();
+
+
     if (
-        message.toLowerCase().includes(
+        lower.includes(
             "invalid login credentials"
         )
     ) {
 
         return "Incorrect email or password.";
+
     }
 
 
     if (
-        message.toLowerCase().includes(
+        lower.includes(
             "email not confirmed"
         )
     ) {
 
         return "Your email has not been confirmed.";
+
     }
 
 
-    return message ||
-        "Unable to login.";
+    return (
+        message ||
+        "Unable to login."
+    );
+
 }
 
 
-/* ==========================================
-   CHAT CONTROLS
-========================================== */
+/* =========================================================
+   CHAT ENABLE / DISABLE
+========================================================= */
 
 function enableChatControls() {
 
+
     if (messageInput) {
-        messageInput.disabled = false;
+
+        messageInput.disabled =
+            false;
 
         messageInput.placeholder =
             "Type a message...";
+
     }
 
 
     if (sendButton) {
-        sendButton.disabled = false;
+
+        sendButton.disabled =
+            false;
+
     }
 
 
     if (codeButton) {
-        codeButton.disabled = false;
+
+        codeButton.disabled =
+            false;
+
     }
 
 }
 
 
+/* =========================================================
+   DISABLE CHAT
+========================================================= */
+
 function disableChatControls() {
+
 
     if (messageInput) {
 
-        messageInput.disabled = true;
+        messageInput.disabled =
+            true;
 
         messageInput.placeholder =
             "Login to send a message...";
@@ -807,49 +1176,107 @@ function disableChatControls() {
 
 
     if (sendButton) {
-        sendButton.disabled = true;
+
+        sendButton.disabled =
+            true;
+
     }
 
 
     if (codeButton) {
-        codeButton.disabled = true;
+
+        codeButton.disabled =
+            true;
+
     }
 
 }
 
 
-/* ==========================================
+/* =========================================================
    LOAD MESSAGES
-========================================== */
+========================================================= */
 
 async function loadMessages() {
 
-    setStatus("Loading...");
+    if (!messagesContainer) {
+        return;
+    }
 
 
-    const {
-        data,
-        error
-    } =
-        await supabaseClient
-            .from("messages")
-            .select("*")
-            .gt(
-                "expires_at",
-                new Date().toISOString()
-            )
-            .order(
-                "created_at",
-                {
-                    ascending: true
-                }
+    setStatus(
+        "Loading..."
+    );
+
+
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient
+                .from("messages")
+                .select("*")
+                .gt(
+                    "expires_at",
+                    new Date().toISOString()
+                )
+                .order(
+                    "created_at",
+                    {
+                        ascending: true
+                    }
+                );
+
+
+        if (error) {
+
+            console.error(
+                "Load messages error:",
+                error
             );
 
+            setStatus(
+                "Database error"
+            );
 
-    if (error) {
+            return;
+        }
+
+
+        messagesContainer.innerHTML =
+            "";
+
+
+        if (
+            !data ||
+            data.length === 0
+        ) {
+
+            showEmptyState();
+
+        } else {
+
+            data.forEach(
+                addMessage
+            );
+
+        }
+
+
+        setStatus(
+            "Online"
+        );
+
+
+        scrollToBottom();
+
+
+    } catch (error) {
 
         console.error(
-            "Load messages error:",
+            "Unexpected message load error:",
             error
         );
 
@@ -857,47 +1284,26 @@ async function loadMessages() {
             "Database error"
         );
 
-        return;
     }
-
-
-    messagesContainer.innerHTML = "";
-
-
-    if (
-        !data ||
-        data.length === 0
-    ) {
-
-        showEmptyState();
-
-    } else {
-
-        data.forEach(
-            addMessage
-        );
-
-    }
-
-
-    setStatus("Online");
-
-    scrollToBottom();
 
 }
 
 
-/* ==========================================
+/* =========================================================
    REALTIME MESSAGES
-========================================== */
+========================================================= */
 
 function subscribeToMessages() {
+
 
     if (realtimeChannel) {
 
         supabaseClient.removeChannel(
             realtimeChannel
         );
+
+        realtimeChannel =
+            null;
 
     }
 
@@ -912,22 +1318,29 @@ function subscribeToMessages() {
             .on(
                 "postgres_changes",
                 {
-                    event: "INSERT",
-                    schema: "public",
-                    table: "messages"
+                    event:
+                        "INSERT",
+
+                    schema:
+                        "public",
+
+                    table:
+                        "messages"
                 },
+
+
                 (payload) => {
 
-                    /*
-                     * Only display valid,
-                     * non-expired messages.
-                     */
+                    console.log(
+                        "New message:",
+                        payload.new
+                    );
 
-                    removeEmptyState();
 
                     addMessage(
                         payload.new
                     );
+
 
                     scrollToBottom();
 
@@ -967,105 +1380,227 @@ function subscribeToMessages() {
 
                     }
 
+
+                    else if (
+                        status ===
+                        "TIMED_OUT"
+                    ) {
+
+                        setStatus(
+                            "Realtime timeout"
+                        );
+
+                    }
+
                 }
             );
 
 }
 
 
-/* ==========================================
-   LOAD ACTIVE PDF
-========================================== */
+/* =========================================================
+   LOAD PUBLIC PDF
+========================================================= */
 
 async function loadActivePDF() {
 
+    console.log(
+        "Loading public PDF..."
+    );
+
+
     if (!pdfSection) {
+
+        console.error(
+            "pdfSection not found."
+        );
+
         return;
     }
 
 
-    const {
-        data,
-        error
-    } =
-        await supabaseClient
-            .from("pdf_documents")
-            .select(
-                "file_name, github_url"
-            )
-            .eq(
-                "is_active",
-                true
-            )
-            .order(
-                "created_at",
-                {
-                    ascending: false
-                }
-            )
-            .limit(1)
-            .maybeSingle();
+    /*
+     * Hide temporarily while loading.
+     */
+
+    pdfSection.classList.add(
+        "hidden"
+    );
 
 
-    if (error) {
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient
+                .from("pdf_documents")
+                .select(
+                    "file_name, github_url"
+                )
+                .eq(
+                    "is_active",
+                    true
+                )
+                .order(
+                    "created_at",
+                    {
+                        ascending: false
+                    }
+                )
+                .limit(1)
+                .maybeSingle();
+
+
+        /*
+         * Database / RLS error.
+         */
+
+        if (error) {
+
+            console.error(
+                "Public PDF load error:",
+                error
+            );
+
+
+            if (pdfStatus) {
+
+                pdfStatus.textContent =
+                    "Unable to load document.";
+
+            }
+
+
+            return;
+        }
+
+
+        /*
+         * No active PDF.
+         */
+
+        if (!data) {
+
+            console.log(
+                "No active PDF found."
+            );
+
+
+            return;
+        }
+
+
+        /*
+         * Missing URL.
+         */
+
+        if (!data.github_url) {
+
+            console.error(
+                "PDF exists but github_url is empty."
+            );
+
+
+            if (pdfTitle) {
+
+                pdfTitle.textContent =
+                    data.file_name ||
+                    "Lab PDF";
+
+            }
+
+
+            if (pdfStatus) {
+
+                pdfStatus.textContent =
+                    "PDF link is missing.";
+
+            }
+
+
+            pdfSection.classList.remove(
+                "hidden"
+            );
+
+
+            return;
+        }
+
+
+        /*
+         * Set PDF information.
+         */
+
+        if (pdfTitle) {
+
+            pdfTitle.textContent =
+                data.file_name ||
+                "Lab PDF";
+
+        }
+
+
+        if (pdfStatus) {
+
+            pdfStatus.textContent =
+                "Active lab document";
+
+        }
+
+
+        if (pdfButton) {
+
+            pdfButton.href =
+                data.github_url;
+
+            pdfButton.target =
+                "_blank";
+
+            pdfButton.rel =
+                "noopener noreferrer";
+
+        }
+
+
+        /*
+         * SHOW PDF
+         *
+         * This happens regardless of
+         * whether the user is logged in.
+         */
+
+        pdfSection.classList.remove(
+            "hidden"
+        );
+
+
+        console.log(
+            "Public PDF loaded:",
+            data.file_name,
+            data.github_url
+        );
+
+
+    } catch (error) {
 
         console.error(
-            "Load PDF error:",
+            "Unexpected PDF error:",
             error
         );
 
-        pdfSection.classList.add(
-            "hidden"
-        );
-
-        return;
     }
-
-
-    if (!data) {
-
-        pdfSection.classList.add(
-            "hidden"
-        );
-
-        return;
-    }
-
-
-    if (!data.github_url) {
-
-        pdfSection.classList.add(
-            "hidden"
-        );
-
-        return;
-    }
-
-
-    pdfTitle.textContent =
-        data.file_name;
-
-
-    pdfStatus.textContent =
-        "Active lab document";
-
-
-    pdfButton.href =
-        data.github_url;
-
-
-    pdfSection.classList.remove(
-        "hidden"
-    );
 
 }
 
 
-/* ==========================================
-   ONLINE USERS / PRESENCE
-========================================== */
+/* =========================================================
+   PRESENCE
+========================================================= */
 
 function startPresence() {
+
 
     if (!currentProfile) {
         return;
@@ -1078,6 +1613,9 @@ function startPresence() {
             presenceChannel
         );
 
+        presenceChannel =
+            null;
+
     }
 
 
@@ -1086,53 +1624,65 @@ function startPresence() {
             "labchat-online-users",
             {
                 config: {
+
                     presence: {
+
                         key:
                             userSessionId
+
                     }
+
                 }
+
             }
         );
 
 
-    presenceChannel.on(
-        "presence",
-        {
-            event: "sync"
-        },
-        () => {
-
-            updateOnlineCount();
-
-        }
-    );
-
+    /*
+     * Presence sync
+     */
 
     presenceChannel.on(
         "presence",
         {
-            event: "join"
+            event:
+                "sync"
         },
-        () => {
-
-            updateOnlineCount();
-
-        }
+        updateOnlineCount
     );
 
+
+    /*
+     * User joined
+     */
 
     presenceChannel.on(
         "presence",
         {
-            event: "leave"
+            event:
+                "join"
         },
-        () => {
-
-            updateOnlineCount();
-
-        }
+        updateOnlineCount
     );
 
+
+    /*
+     * User left
+     */
+
+    presenceChannel.on(
+        "presence",
+        {
+            event:
+                "leave"
+        },
+        updateOnlineCount
+    );
+
+
+    /*
+     * Subscribe
+     */
 
     presenceChannel.subscribe(
         async (status) => {
@@ -1142,18 +1692,30 @@ function startPresence() {
                 "SUBSCRIBED"
             ) {
 
-                await presenceChannel.track(
-                    {
-                        username:
-                            currentProfile.username,
+                try {
 
-                        user_id:
-                            currentProfile.id
-                    }
-                );
+                    await presenceChannel.track(
+                        {
+                            username:
+                                currentProfile.username,
+
+                            user_id:
+                                currentProfile.id
+                        }
+                    );
 
 
-                updateOnlineCount();
+                    updateOnlineCount();
+
+
+                } catch (error) {
+
+                    console.error(
+                        "Presence tracking error:",
+                        error
+                    );
+
+                }
 
             }
 
@@ -1163,13 +1725,17 @@ function startPresence() {
 }
 
 
-/* ==========================================
+/* =========================================================
    UPDATE ONLINE COUNT
-========================================== */
+========================================================= */
 
 function updateOnlineCount() {
 
-    if (!presenceChannel) {
+    if (
+        !presenceChannel ||
+        !onlineCount
+    ) {
+
         return;
     }
 
@@ -1220,40 +1786,54 @@ function updateOnlineCount() {
 }
 
 
-/* ==========================================
+/* =========================================================
    SEND MESSAGE
-========================================== */
+========================================================= */
 
-messageForm.addEventListener(
-    "submit",
-    async (event) => {
+async function handleMessageSubmit(
+    event
+) {
 
-        event.preventDefault();
-
-
-        if (!currentUser) {
-
-            openLogin();
-
-            return;
-        }
+    event.preventDefault();
 
 
-        const text =
-            messageInput.value;
+    /*
+     * Guest cannot send.
+     */
+
+    if (!currentUser) {
+
+        openLogin();
+
+        return;
+    }
 
 
-        if (
-            !text.trim()
-        ) {
+    if (!messageInput) {
+        return;
+    }
 
-            return;
-        }
 
+    const text =
+        messageInput.value;
+
+
+    if (!text.trim()) {
+
+        return;
+
+    }
+
+
+    if (sendButton) {
 
         sendButton.disabled =
             true;
 
+    }
+
+
+    try {
 
         const {
             error
@@ -1286,152 +1866,218 @@ messageForm.addEventListener(
                 "Message could not be sent."
             );
 
-        } else {
-
-            messageInput.value = "";
-
-            autoResizeTextarea();
-
-            messageInput.focus();
-
-        }
-
-
-        sendButton.disabled =
-            false;
-
-    }
-);
-
-
-/* ==========================================
-   ENTER TO SEND
-========================================== */
-
-messageInput.addEventListener(
-    "keydown",
-    (event) => {
-
-
-        /*
-         * Normal mode:
-         *
-         * Enter = send
-         *
-         * Shift + Enter =
-         * new line
-         */
-
-        if (
-            event.key === "Enter" &&
-            !event.shiftKey &&
-            !isCodeMode
-        ) {
-
-            event.preventDefault();
-
-            messageForm.requestSubmit();
-
-        }
-
-
-        /*
-         * Code mode:
-         *
-         * Enter = new line
-         *
-         * Ctrl + Enter = send
-         */
-
-        if (
-            event.key === "Enter" &&
-            event.ctrlKey &&
-            isCodeMode
-        ) {
-
-            event.preventDefault();
-
-            messageForm.requestSubmit();
-
-        }
-
-    }
-);
-
-
-/* ==========================================
-   CODE MODE
-========================================== */
-
-codeButton.addEventListener(
-    "click",
-    () => {
-
-
-        if (!currentUser) {
-
-            openLogin();
 
             return;
+
         }
 
 
-        isCodeMode =
-            !isCodeMode;
+        messageInput.value =
+            "";
 
 
-        if (isCodeMode) {
+        autoResizeTextarea();
+
+
+        messageInput.focus();
+
+
+    } catch (error) {
+
+        console.error(
+            "Unexpected send error:",
+            error
+        );
+
+
+        alert(
+            "Message could not be sent."
+        );
+
+
+    } finally {
+
+        if (sendButton) {
+
+            sendButton.disabled =
+                false;
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   MESSAGE KEYBOARD
+========================================================= */
+
+function handleMessageKeydown(
+    event
+) {
+
+
+    /*
+     * Normal mode:
+     *
+     * Enter = send
+     *
+     * Shift + Enter = newline
+     */
+
+    if (
+        event.key === "Enter" &&
+        !event.shiftKey &&
+        !isCodeMode
+    ) {
+
+        event.preventDefault();
+
+        if (messageForm) {
+
+            messageForm.requestSubmit();
+
+        }
+
+        return;
+    }
+
+
+    /*
+     * Code mode:
+     *
+     * Enter = newline
+     *
+     * Ctrl + Enter = send
+     */
+
+    if (
+        event.key === "Enter" &&
+        event.ctrlKey &&
+        isCodeMode
+    ) {
+
+        event.preventDefault();
+
+        if (messageForm) {
+
+            messageForm.requestSubmit();
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   CODE MODE
+========================================================= */
+
+function toggleCodeMode() {
+
+
+    if (!currentUser) {
+
+        openLogin();
+
+        return;
+    }
+
+
+    isCodeMode =
+        !isCodeMode;
+
+
+    if (isCodeMode) {
+
+        if (codeButton) {
 
             codeButton.classList.add(
                 "active"
             );
 
+        }
+
+
+        if (codeIndicator) {
 
             codeIndicator.classList.remove(
                 "hidden"
             );
 
+        }
+
+
+        if (messageInput) {
 
             messageInput.placeholder =
                 "Write your code here...";
 
         }
 
+    }
 
-        else {
+
+    else {
+
+        if (codeButton) {
 
             codeButton.classList.remove(
                 "active"
             );
 
+        }
+
+
+        if (codeIndicator) {
 
             codeIndicator.classList.add(
                 "hidden"
             );
 
+        }
+
+
+        if (messageInput) {
 
             messageInput.placeholder =
                 "Type a message...";
 
         }
 
+    }
+
+
+    if (messageInput) {
 
         messageInput.focus();
 
     }
-);
+
+}
 
 
-/* ==========================================
+/* =========================================================
    DISPLAY MESSAGE
-========================================== */
+========================================================= */
 
 function addMessage(message) {
 
-    if (!message) {
+    if (
+        !message ||
+        !messagesContainer
+    ) {
+
         return;
+
     }
 
+
+    /*
+     * Check expiration.
+     */
 
     const expires =
         new Date(
@@ -1447,8 +2093,13 @@ function addMessage(message) {
     ) {
 
         return;
+
     }
 
+
+    /*
+     * Prevent duplicate messages.
+     */
 
     if (
         document.querySelector(
@@ -1457,11 +2108,16 @@ function addMessage(message) {
     ) {
 
         return;
+
     }
 
 
     removeEmptyState();
 
+
+    /*
+     * Main message element.
+     */
 
     const messageElement =
         document.createElement(
@@ -1477,6 +2133,10 @@ function addMessage(message) {
         message.id;
 
 
+    /*
+     * Own message.
+     */
+
     if (
         currentProfile &&
         message.username ===
@@ -1490,9 +2150,9 @@ function addMessage(message) {
     }
 
 
-    /*
-     * CODE MESSAGE
-     */
+    /* =====================================================
+       CODE MESSAGE
+    ===================================================== */
 
     if (message.is_code) {
 
@@ -1566,9 +2226,9 @@ function addMessage(message) {
     }
 
 
-    /*
-     * NORMAL MESSAGE
-     */
+    /* =====================================================
+       NORMAL MESSAGE
+    ===================================================== */
 
     else {
 
@@ -1636,7 +2296,9 @@ function addMessage(message) {
             message.message;
 
 
-        linkify(text);
+        linkify(
+            text
+        );
 
 
         const actions =
@@ -1678,14 +2340,18 @@ function addMessage(message) {
     }
 
 
+    /*
+     * Add to chat.
+     */
+
     messagesContainer.appendChild(
         messageElement
     );
 
 
     /*
-     * Remove message when its
-     * 5-minute lifetime ends.
+     * Remove automatically when
+     * the 5-minute expiration occurs.
      */
 
     const remaining =
@@ -1693,17 +2359,24 @@ function addMessage(message) {
         Date.now();
 
 
-    if (remaining > 0) {
+    if (
+        remaining > 0
+    ) {
 
         setTimeout(
             () => {
 
-                messageElement.remove();
+                if (
+                    messageElement.isConnected
+                ) {
+
+                    messageElement.remove();
+
+                }
 
 
                 if (
-                    messagesContainer
-                        .children
+                    messagesContainer.children
                         .length === 0
                 ) {
 
@@ -1720,9 +2393,9 @@ function addMessage(message) {
 }
 
 
-/* ==========================================
-   COPY
-========================================== */
+/* =========================================================
+   COPY BUTTON
+========================================================= */
 
 function createCopyButton(
     text,
@@ -1753,9 +2426,10 @@ function createCopyButton(
 
             try {
 
-                await navigator.clipboard.writeText(
-                    text
-                );
+                await navigator.clipboard
+                    .writeText(
+                        text
+                    );
 
 
                 button.textContent =
@@ -1795,11 +2469,16 @@ function createCopyButton(
 }
 
 
-/* ==========================================
+/* =========================================================
    LINKIFY
-========================================== */
+========================================================= */
 
 function linkify(element) {
+
+    if (!element) {
+        return;
+    }
+
 
     const text =
         element.textContent;
@@ -1873,37 +2552,49 @@ function linkify(element) {
 }
 
 
-/* ==========================================
+/* =========================================================
    TIME
-========================================== */
+========================================================= */
 
-function formatTime(timestamp) {
+function formatTime(
+    timestamp
+) {
 
-    return new Date(timestamp)
-        .toLocaleTimeString(
-            [],
-            {
-                hour: "2-digit",
-                minute: "2-digit"
-            }
-        );
+    return new Date(
+        timestamp
+    ).toLocaleTimeString(
+        [],
+        {
+            hour:
+                "2-digit",
+
+            minute:
+                "2-digit"
+        }
+    );
 
 }
 
 
-/* ==========================================
+/* =========================================================
    EMPTY STATE
-========================================== */
+========================================================= */
 
 function showEmptyState() {
 
+    if (!messagesContainer) {
+        return;
+    }
+
+
     if (
-        document.querySelector(
+        messagesContainer.querySelector(
             ".empty-state"
         )
     ) {
 
         return;
+
     }
 
 
@@ -1950,46 +2641,54 @@ function showEmptyState() {
 }
 
 
+/* =========================================================
+   REMOVE EMPTY STATE
+========================================================= */
+
 function removeEmptyState() {
 
+    if (!messagesContainer) {
+        return;
+    }
+
+
     const empty =
-        document.querySelector(
+        messagesContainer.querySelector(
             ".empty-state"
         );
 
 
     if (empty) {
+
         empty.remove();
+
     }
 
 }
 
 
-/* ==========================================
+/* =========================================================
    STATUS
-========================================== */
+========================================================= */
 
-function setStatus(status) {
+function setStatus(
+    status
+) {
 
-    if (connectionStatus) {
-
-        connectionStatus.textContent =
-            status;
-
+    if (!connectionStatus) {
+        return;
     }
+
+
+    connectionStatus.textContent =
+        status;
 
 }
 
 
-/* ==========================================
+/* =========================================================
    TEXTAREA AUTO RESIZE
-========================================== */
-
-messageInput.addEventListener(
-    "input",
-    autoResizeTextarea
-);
-
+========================================================= */
 
 function autoResizeTextarea() {
 
@@ -2011,9 +2710,9 @@ function autoResizeTextarea() {
 }
 
 
-/* ==========================================
+/* =========================================================
    SCROLL
-========================================== */
+========================================================= */
 
 function scrollToBottom() {
 
@@ -2028,9 +2727,9 @@ function scrollToBottom() {
 }
 
 
-/* ==========================================
+/* =========================================================
    SIGN OUT
-========================================== */
+========================================================= */
 
 async function leaveChat() {
 
@@ -2039,72 +2738,103 @@ async function leaveChat() {
     );
 
 
-    if (presenceChannel) {
+    try {
 
-        try {
+        /*
+         * Stop presence first.
+         */
 
-            await presenceChannel.untrack();
+        if (presenceChannel) {
 
-        } catch (error) {
+            try {
 
-            console.error(
-                "Presence untrack error:",
-                error
-            );
+                await presenceChannel.untrack();
+
+            } catch (error) {
+
+                console.error(
+                    "Presence untrack error:",
+                    error
+                );
+
+            }
+
+
+            await supabaseClient
+                .removeChannel(
+                    presenceChannel
+                );
+
+
+            presenceChannel =
+                null;
 
         }
 
 
-        await supabaseClient.removeChannel(
-            presenceChannel
+        /*
+         * Remove realtime.
+         */
+
+        if (realtimeChannel) {
+
+            await supabaseClient
+                .removeChannel(
+                    realtimeChannel
+                );
+
+
+            realtimeChannel =
+                null;
+
+        }
+
+
+        /*
+         * Sign out from Supabase.
+         */
+
+        await supabaseClient.auth.signOut();
+
+
+    } catch (error) {
+
+        console.error(
+            "Sign out error:",
+            error
         );
 
-
-        presenceChannel = null;
-
     }
-
-
-    if (realtimeChannel) {
-
-        await supabaseClient.removeChannel(
-            realtimeChannel
-        );
-
-
-        realtimeChannel = null;
-
-    }
-
-
-    await supabaseClient.auth.signOut();
 
 }
 
 
-if (leaveButton) {
-
-    leaveButton.addEventListener(
-        "click",
-        leaveChat
-    );
-
-}
-
-
-/* ==========================================
+/* =========================================================
    RESET AFTER SIGN OUT
-========================================== */
+========================================================= */
 
 async function resetLabChat() {
 
-    currentUser = null;
+    console.log(
+        "Resetting LabChat..."
+    );
 
-    currentProfile = null;
+
+    currentUser =
+        null;
 
 
-    isCodeMode = false;
+    currentProfile =
+        null;
 
+
+    isCodeMode =
+        false;
+
+
+    /*
+     * Guest UI.
+     */
 
     if (currentUserElement) {
 
@@ -2123,6 +2853,10 @@ async function resetLabChat() {
     }
 
 
+    /*
+     * Clear chat.
+     */
+
     if (messagesContainer) {
 
         messagesContainer.innerHTML =
@@ -2131,14 +2865,9 @@ async function resetLabChat() {
     }
 
 
-    if (pdfSection) {
-
-        pdfSection.classList.add(
-            "hidden"
-        );
-
-    }
-
+    /*
+     * Reset code mode.
+     */
 
     if (codeButton) {
 
@@ -2158,6 +2887,10 @@ async function resetLabChat() {
     }
 
 
+    /*
+     * Reset message input.
+     */
+
     if (messageInput) {
 
         messageInput.value =
@@ -2169,9 +2902,21 @@ async function resetLabChat() {
     }
 
 
-    onlineCount.textContent =
-        "0 online";
+    /*
+     * Reset online count.
+     */
 
+    if (onlineCount) {
+
+        onlineCount.textContent =
+            "0 online";
+
+    }
+
+
+    /*
+     * Disable chat.
+     */
 
     disableChatControls();
 
@@ -2181,14 +2926,29 @@ async function resetLabChat() {
     );
 
 
+    /*
+     * IMPORTANT
+     *
+     * DO NOT HIDE THE PDF.
+     *
+     * PDF is public.
+     */
+
+    await loadActivePDF();
+
+
+    /*
+     * Show login.
+     */
+
     openLogin();
 
 }
 
 
-/* ==========================================
+/* =========================================================
    PAGE CLEANUP
-========================================== */
+========================================================= */
 
 window.addEventListener(
     "beforeunload",
