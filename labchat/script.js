@@ -157,13 +157,13 @@ joinForm.addEventListener(
 
         await loadMessages();
 
+        await loadActivePDF();
+
         subscribeToMessages();
 
-        startPresence();
+         startPresence();
 
-        startHeartbeat();
-
-        messageInput.focus();
+         startHeartbeat();
     }
 );
 
