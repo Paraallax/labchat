@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>LabChat</title>
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+
+<body>
+
+    <!-- =========================================
+         LOGIN POPUP
+         Opens with Ctrl + Shift + L
+    ========================================== -->
+
+    <div
+        id="loginOverlay"
+        class="login-overlay hidden"
+    >
+
+        <div
+            id="loginModal"
+            class="login-modal"
+        >
+
+            <button
+                id="closeLoginButton"
+                class="login-close"
+                type="button"
+                aria-label="Close login"
+            >
+                ×
+            </button>
+
+
+            <div class="login-logo">
+                LC
+            </div>
+
+
+            <h1>LabChat Login</h1>
+
+            <p class="login-subtitle">
+                Sign in to continue
+            </p>
+
+
+            <form id="loginForm">
+
+                <!-- EMAIL / ID -->
+
+                <div class="login-field">
+
+                    <label for="loginIdentifier">
+                        Email / ID
+                    </label>
+
+                    <input
+                        id="loginIdentifier"
+                        type="text"
+                        placeholder="Enter your email or ID"
+                        autocomplete="username"
+                        required
+                    >
+
+                </div>
+
+
+                <!-- PASSWORD -->
+
+                <div class="login-field">
+
+                    <label for="loginPassword">
+                        Password
+                    </label>
+
+                    <input
+                        id="loginPassword"
+                        type="password"
+                        placeholder="Enter your password"
+                        autocomplete="current-password"
+                        required
+                    >
+
+                </div>
+
+
+                <p
+                    id="loginError"
+                    class="login-error"
+                ></p>
+
+
+                <button
+                    id="loginButton"
+                    class="login-submit"
+                    type="submit"
+                >
+                    Login
+                </button>
+
+            </form>
+
+
+            <p class="login-hint">
+                Press <strong>Ctrl + Shift + L</strong> to open login.
+            </p>
+
+        </div>
+
+    </div>
+
+
+
+    <!-- =========================================
+         NORMAL LABCHAT
+    ========================================== -->
+
+    <section
+        id="chatScreen"
+        class="chat-screen"
+    >
+
+        <!-- =====================================
+             TOPBAR
+        ====================================== -->
+
+        <header class="topbar">
+
+            <div class="brand">
+
+                <div class="small-logo">
+                    LC
+                </div>
+
+                <div>
+
+                    <h2>
+                        LabChat
+                    </h2>
+
+                    <span id="connectionStatus">
+                        Connecting...
+                    </span>
+
+                </div>
+
+            </div>
+
+
+            <div class="online-info">
+
+                <span class="online-dot"></span>
+
+                <span id="onlineCount">
+                    0 online
+                </span>
+
+            </div>
+
+
+            <div class="user-info">
+
+                <span id="currentUser"></span>
+
+                <button
+                    id="leaveButton"
+                    class="leave-button"
+                    type="button"
+                >
+                    Leave
+                </button>
+
+            </div>
+
+        </header>
+
+
+
+        <!-- =====================================
+             MESSAGES
+        ====================================== -->
+
+        <main
+            id="messages"
+            class="messages"
+            aria-live="polite"
+        >
+        </main>
+
+
+
+        <!-- =====================================
+             MESSAGE FORM
+        ====================================== -->
+
+        <form
+            id="messageForm"
+            class="message-form"
+        >
+
+            <div class="input-area">
+
+                <div
+                    id="codeIndicator"
+                    class="code-indicator hidden"
+                >
+                    CODE MODE
+                </div>
+
+
+                <textarea
+                    id="messageInput"
+                    maxlength="10000"
+                    placeholder="Type a message..."
+                    autocomplete="off"
+                    rows="1"
+                ></textarea>
+
+            </div>
+
+
+            <button
+                type="button"
+                id="codeButton"
+                class="tool-button"
+            >
+                &lt;/&gt; Code
+            </button>
+
+
+            <button
+                type="submit"
+                id="sendButton"
+            >
+                Send
+            </button>
+
+        </form>
+
+    </section>
+
+
+
+    <!-- =========================================
+         SUPABASE
+    ========================================== -->
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>
