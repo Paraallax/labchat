@@ -286,6 +286,67 @@ function subscribeToMessages() {
             );
 }
 
+/* ==========================================
+   LOAD ACTIVE PDF
+========================================== */
+
+async function loadActivePDF() {
+
+    const { data, error } =
+        await supabaseClient
+            .from("pdf_documents")
+            .select(
+                "file_name, github_url"
+            )
+            .eq(
+                "is_active",
+                true
+            )
+            .order(
+                "created_at",
+                {
+                    ascending: false
+                }
+            )
+            .limit(1)
+            .maybeSingle();
+
+    if (error) {
+
+        console.error(
+            "Load PDF error:",
+            error
+        );
+
+        pdfSection.classList.add(
+            "hidden"
+        );
+
+        return;
+    }
+
+    if (!data) {
+
+        pdfSection.classList.add(
+            "hidden"
+        );
+
+        return;
+    }
+
+    pdfTitle.textContent =
+        data.file_name;
+
+    pdfStatus.textContent =
+        "Active lab document";
+
+    pdfButton.href =
+        data.github_url;
+
+    pdfSection.classList.remove(
+        "hidden"
+    );
+}
 
 /* ==========================================
    ONLINE USERS / PRESENCE
