@@ -6,45 +6,67 @@ const SUPABASE_KEY = "sb_publishable_fftKRus4w4NXriH07kWvQg_Up9qWpy6";
    SUPABASE
 ========================================== */
 
-const supabaseClient = window.supabase.createClient(
-    SUPABASE_URL,
-    SUPABASE_KEY
-);
+const supabaseClient =
+    window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_KEY
+    );
 
 
 /* ==========================================
    STATE
 ========================================== */
 
-let currentUsername = "";
+let currentUser = null;
+let currentProfile = null;
+
 let realtimeChannel = null;
 let presenceChannel = null;
-let userSessionId = crypto.randomUUID();
+
+let userSessionId =
+    crypto.randomUUID();
 
 let isCodeMode = false;
-let heartbeatTimer = null;
 
 
 /* ==========================================
    DOM
 ========================================== */
 
-const joinScreen =
-    document.getElementById("joinScreen");
+const loginOverlay =
+    document.getElementById("loginOverlay");
+
+const loginModal =
+    document.getElementById("loginModal");
+
+const loginForm =
+    document.getElementById("loginForm");
+
+const loginIdentifier =
+    document.getElementById("loginIdentifier");
+
+const loginPassword =
+    document.getElementById("loginPassword");
+
+const loginButton =
+    document.getElementById("loginButton");
+
+const loginError =
+    document.getElementById("loginError");
+
+const closeLoginButton =
+    document.getElementById("closeLoginButton");
+
+const openLoginButton =
+    document.getElementById("openLoginButton");
+
+const loginNotice =
+    document.getElementById("loginNotice");
 
 const chatScreen =
     document.getElementById("chatScreen");
 
-const joinForm =
-    document.getElementById("joinForm");
-
-const usernameInput =
-    document.getElementById("username");
-
-const usernameError =
-    document.getElementById("usernameError");
-
-const currentUser =
+const currentUserElement =
     document.getElementById("currentUser");
 
 const connectionStatus =
@@ -88,84 +110,712 @@ const pdfButton =
 
 
 /* ==========================================
-   JOIN
+   INITIALIZATION
 ========================================== */
 
-joinForm.addEventListener(
-    "submit",
-    async (event) => {
+document.addEventListener(
+    "DOMContentLoaded",
+    initializeLabChat
+);
 
-        event.preventDefault();
 
-        usernameError.textContent = "";
+async function initializeLabChat() {
 
-        const name =
-            usernameInput.value.trim();
+    console.log("LabChat initializing...");
 
-        if (!name) {
-            return;
-        }
+    setStatus("Connecting...");
 
-        const cleanName =
-            name.substring(0, 30);
+    setupLoginControls();
 
-        const { data, error } =
-            await supabaseClient.rpc(
-                "claim_username",
-                {
-                    requested_username:
-                        cleanName,
+    setupMessageControls();
 
-                    requested_session:
-                        userSessionId
+    setupKeyboardShortcuts();
+
+    disableChatControls();
+
+    await restoreSession();
+
+}
+
+
+/* ==========================================
+   LOGIN CONTROLS
+========================================== */
+
+function setupLoginControls() {
+
+
+    /* LOGIN FORM */
+
+    if (loginForm) {
+
+        loginForm.addEventListener(
+            "submit",
+            handleLogin
+        );
+
+    }
+
+
+    /* CLOSE LOGIN */
+
+    if (closeLoginButton) {
+
+        closeLoginButton.addEventListener(
+            "click",
+            closeLogin
+        );
+
+    }
+
+
+    /* OPEN LOGIN */
+
+    if (openLoginButton) {
+
+        openLoginButton.addEventListener(
+            "click",
+            openLogin
+        );
+
+    }
+
+
+    /* CLICK OUTSIDE MODAL */
+
+    if (loginOverlay) {
+
+        loginOverlay.addEventListener(
+            "click",
+            (event) => {
+
+                if (
+                    event.target ===
+                    loginOverlay
+                ) {
+
+                    closeLogin();
                 }
-            );
+
+            }
+        );
+
+    }
+
+}
+
+
+/* ==========================================
+   KEYBOARD SHORTCUTS
+========================================== */
+
+function setupKeyboardShortcuts() {
+
+    document.addEventListener(
+        "keydown",
+        (event) => {
+
+            /*
+             * Ctrl + Shift + L
+             * Open login
+             */
+
+            if (
+                event.ctrlKey &&
+                event.shiftKey &&
+                event.key.toLowerCase() === "l"
+            ) {
+
+                event.preventDefault();
+
+                openLogin();
+
+                return;
+            }
+
+
+            /*
+             * Escape
+             * Close login
+             */
+
+            if (
+                event.key === "Escape" &&
+                loginOverlay &&
+                !loginOverlay.classList.contains(
+                    "hidden"
+                )
+            ) {
+
+                closeLogin();
+            }
+
+        }
+    );
+
+}
+
+
+/* ==========================================
+   OPEN LOGIN
+========================================== */
+
+function openLogin() {
+
+    if (!loginOverlay) {
+        return;
+    }
+
+    loginOverlay.classList.remove(
+        "hidden"
+    );
+
+    if (loginError) {
+        loginError.textContent = "";
+    }
+
+    setTimeout(
+        () => {
+
+            if (loginIdentifier) {
+                loginIdentifier.focus();
+            }
+
+        },
+        50
+    );
+}
+
+
+/* ==========================================
+   CLOSE LOGIN
+========================================== */
+
+function closeLogin() {
+
+    if (!loginOverlay) {
+        return;
+    }
+
+    loginOverlay.classList.add(
+        "hidden"
+    );
+
+}
+
+
+/* ==========================================
+   LOGIN
+========================================== */
+
+async function handleLogin(event) {
+
+    event.preventDefault();
+
+    if (!loginIdentifier || !loginPassword) {
+        return;
+    }
+
+
+    const identifier =
+        loginIdentifier.value.trim();
+
+    const password =
+        loginPassword.value;
+
+
+    if (!identifier || !password) {
+        return;
+    }
+
+
+    clearLoginError();
+
+    setLoginLoading(true);
+
+
+    /*
+     * Current database architecture:
+     *
+     * Supabase Auth uses email + password.
+     *
+     * The profiles table currently contains
+     * username / role / is_active, but no
+     * email column.
+     */
+
+    if (!identifier.includes("@")) {
+
+        showLoginError(
+            "Please use your Supabase Auth email. Username / ID login will be added separately."
+        );
+
+        setLoginLoading(false);
+
+        return;
+    }
+
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient.auth.signInWithPassword(
+            {
+                email: identifier,
+                password: password
+            }
+        );
+
+
+    if (error) {
+
+        console.error(
+            "Login error:",
+            error
+        );
+
+        showLoginError(
+            getLoginErrorMessage(error)
+        );
+
+        setLoginLoading(false);
+
+        return;
+    }
+
+
+    if (!data || !data.user) {
+
+        showLoginError(
+            "Login failed. Please try again."
+        );
+
+        setLoginLoading(false);
+
+        return;
+    }
+
+
+    const success =
+        await loadUserProfile(
+            data.user
+        );
+
+
+    if (!success) {
+
+        await supabaseClient.auth.signOut();
+
+        setLoginLoading(false);
+
+        return;
+    }
+
+
+    loginPassword.value = "";
+
+    setLoginLoading(false);
+
+}
+
+
+/* ==========================================
+   RESTORE EXISTING SESSION
+========================================== */
+
+async function restoreSession() {
+
+    try {
+
+        const {
+            data,
+            error
+        } =
+            await supabaseClient.auth.getSession();
+
 
         if (error) {
 
             console.error(
-                "Username claim error:",
+                "Session error:",
                 error
             );
 
-            usernameError.textContent =
-                "Could not connect to the server.";
+            setStatus(
+                "Authentication error"
+            );
 
             return;
         }
 
-        if (data !== true) {
 
-            usernameError.textContent =
-                "That name is already being used.";
+        if (!data.session) {
+
+            setStatus("Offline");
 
             return;
         }
 
-        currentUsername = cleanName;
 
-        currentUser.textContent =
-            currentUsername;
-
-        joinScreen.classList.add(
-            "hidden"
+        await loadUserProfile(
+            data.session.user
         );
 
-        chatScreen.classList.remove(
-            "hidden"
+
+    } catch (error) {
+
+        console.error(
+            "Session restore error:",
+            error
         );
 
-        await loadMessages();
+        setStatus(
+            "Authentication error"
+        );
 
-        await loadActivePDF();
+    }
 
-        subscribeToMessages();
+}
 
-         startPresence();
 
-         startHeartbeat();
+/* ==========================================
+   AUTH STATE LISTENER
+========================================== */
+
+supabaseClient.auth.onAuthStateChange(
+    async (event, session) => {
+
+        console.log(
+            "Auth event:",
+            event
+        );
+
+
+        if (
+            event === "SIGNED_OUT"
+        ) {
+
+            await resetLabChat();
+
+            return;
+        }
+
+
+        if (
+            event === "SIGNED_IN" &&
+            session &&
+            !currentProfile
+        ) {
+
+            await loadUserProfile(
+                session.user
+            );
+
+        }
+
     }
 );
+
+
+/* ==========================================
+   LOAD PROFILE
+========================================== */
+
+async function loadUserProfile(user) {
+
+    if (!user) {
+        return false;
+    }
+
+
+    const {
+        data,
+        error
+    } =
+        await supabaseClient
+            .from("profiles")
+            .select(
+                "id, username, role, is_active"
+            )
+            .eq(
+                "id",
+                user.id
+            )
+            .maybeSingle();
+
+
+    if (error) {
+
+        console.error(
+            "Profile load error:",
+            error
+        );
+
+        showLoginError(
+            "Could not load your profile. Check your profiles table permissions."
+        );
+
+        return false;
+    }
+
+
+    if (!data) {
+
+        showLoginError(
+            "Your account does not have a LabChat profile."
+        );
+
+        return false;
+    }
+
+
+    /*
+     * Account disabled
+     */
+
+    if (
+        data.is_active !== true
+    ) {
+
+        showLoginError(
+            "Your LabChat account is inactive. Contact an administrator."
+        );
+
+        return false;
+    }
+
+
+    /*
+     * ADMIN
+     */
+
+    if (
+        data.role === "admin"
+    ) {
+
+        console.log(
+            "Admin login detected."
+        );
+
+        /*
+         * Admin dashboard is one folder
+         * above labchat.
+         */
+
+        window.location.href =
+            "../admin/admin.html";
+
+        return true;
+    }
+
+
+    /*
+     * NORMAL USER
+     */
+
+    if (
+        data.role !== "user"
+    ) {
+
+        showLoginError(
+            "Your account has an invalid role."
+        );
+
+        return false;
+    }
+
+
+    currentUser = user;
+
+    currentProfile = data;
+
+
+    currentUserElement.textContent =
+        data.username;
+
+
+    closeLogin();
+
+
+    if (loginNotice) {
+
+        loginNotice.classList.add(
+            "hidden"
+        );
+
+    }
+
+
+    enableChatControls();
+
+
+    setStatus("Online");
+
+
+    /*
+     * Load application data
+     */
+
+    await loadMessages();
+
+    await loadActivePDF();
+
+    subscribeToMessages();
+
+    startPresence();
+
+
+    messageInput.focus();
+
+
+    console.log(
+        "LabChat user logged in:",
+        data.username
+    );
+
+
+    return true;
+}
+
+
+/* ==========================================
+   LOGIN ERROR
+========================================== */
+
+function showLoginError(message) {
+
+    if (!loginError) {
+        return;
+    }
+
+    loginError.textContent =
+        message;
+}
+
+
+function clearLoginError() {
+
+    if (!loginError) {
+        return;
+    }
+
+    loginError.textContent = "";
+
+}
+
+
+/* ==========================================
+   LOGIN BUTTON STATE
+========================================== */
+
+function setLoginLoading(loading) {
+
+    if (!loginButton) {
+        return;
+    }
+
+
+    loginButton.disabled =
+        loading;
+
+
+    loginButton.textContent =
+        loading
+            ? "Logging in..."
+            : "Login";
+
+}
+
+
+/* ==========================================
+   LOGIN ERROR MESSAGES
+========================================== */
+
+function getLoginErrorMessage(error) {
+
+    if (!error) {
+        return "Login failed.";
+    }
+
+
+    const message =
+        error.message || "";
+
+
+    if (
+        message.toLowerCase().includes(
+            "invalid login credentials"
+        )
+    ) {
+
+        return "Incorrect email or password.";
+    }
+
+
+    if (
+        message.toLowerCase().includes(
+            "email not confirmed"
+        )
+    ) {
+
+        return "Your email has not been confirmed.";
+    }
+
+
+    return message ||
+        "Unable to login.";
+}
+
+
+/* ==========================================
+   CHAT CONTROLS
+========================================== */
+
+function enableChatControls() {
+
+    if (messageInput) {
+        messageInput.disabled = false;
+
+        messageInput.placeholder =
+            "Type a message...";
+    }
+
+
+    if (sendButton) {
+        sendButton.disabled = false;
+    }
+
+
+    if (codeButton) {
+        codeButton.disabled = false;
+    }
+
+}
+
+
+function disableChatControls() {
+
+    if (messageInput) {
+
+        messageInput.disabled = true;
+
+        messageInput.placeholder =
+            "Login to send a message...";
+
+    }
+
+
+    if (sendButton) {
+        sendButton.disabled = true;
+    }
+
+
+    if (codeButton) {
+        codeButton.disabled = true;
+    }
+
+}
 
 
 /* ==========================================
@@ -176,7 +826,11 @@ async function loadMessages() {
 
     setStatus("Loading...");
 
-    const { data, error } =
+
+    const {
+        data,
+        error
+    } =
         await supabaseClient
             .from("messages")
             .select("*")
@@ -191,6 +845,7 @@ async function loadMessages() {
                 }
             );
 
+
     if (error) {
 
         console.error(
@@ -198,25 +853,37 @@ async function loadMessages() {
             error
         );
 
-        setStatus("Database error");
+        setStatus(
+            "Database error"
+        );
 
         return;
     }
 
+
     messagesContainer.innerHTML = "";
 
-    if (!data || data.length === 0) {
+
+    if (
+        !data ||
+        data.length === 0
+    ) {
 
         showEmptyState();
 
     } else {
 
-        data.forEach(addMessage);
+        data.forEach(
+            addMessage
+        );
+
     }
+
 
     setStatus("Online");
 
     scrollToBottom();
+
 }
 
 
@@ -231,11 +898,16 @@ function subscribeToMessages() {
         supabaseClient.removeChannel(
             realtimeChannel
         );
+
     }
+
 
     realtimeChannel =
         supabaseClient
-            .channel("labchat-messages")
+            .channel(
+                "labchat-messages"
+            )
+
 
             .on(
                 "postgres_changes",
@@ -246,6 +918,11 @@ function subscribeToMessages() {
                 },
                 (payload) => {
 
+                    /*
+                     * Only display valid,
+                     * non-expired messages.
+                     */
+
                     removeEmptyState();
 
                     addMessage(
@@ -253,8 +930,10 @@ function subscribeToMessages() {
                     );
 
                     scrollToBottom();
+
                 }
             )
+
 
             .subscribe(
                 (status) => {
@@ -263,6 +942,7 @@ function subscribeToMessages() {
                         "Realtime:",
                         status
                     );
+
 
                     if (
                         status ===
@@ -273,7 +953,10 @@ function subscribeToMessages() {
                             "Online"
                         );
 
-                    } else if (
+                    }
+
+
+                    else if (
                         status ===
                         "CHANNEL_ERROR"
                     ) {
@@ -281,10 +964,14 @@ function subscribeToMessages() {
                         setStatus(
                             "Realtime unavailable"
                         );
+
                     }
+
                 }
             );
+
 }
+
 
 /* ==========================================
    LOAD ACTIVE PDF
@@ -292,7 +979,15 @@ function subscribeToMessages() {
 
 async function loadActivePDF() {
 
-    const { data, error } =
+    if (!pdfSection) {
+        return;
+    }
+
+
+    const {
+        data,
+        error
+    } =
         await supabaseClient
             .from("pdf_documents")
             .select(
@@ -311,6 +1006,7 @@ async function loadActivePDF() {
             .limit(1)
             .maybeSingle();
 
+
     if (error) {
 
         console.error(
@@ -325,6 +1021,7 @@ async function loadActivePDF() {
         return;
     }
 
+
     if (!data) {
 
         pdfSection.classList.add(
@@ -334,19 +1031,35 @@ async function loadActivePDF() {
         return;
     }
 
+
+    if (!data.github_url) {
+
+        pdfSection.classList.add(
+            "hidden"
+        );
+
+        return;
+    }
+
+
     pdfTitle.textContent =
         data.file_name;
+
 
     pdfStatus.textContent =
         "Active lab document";
 
+
     pdfButton.href =
         data.github_url;
+
 
     pdfSection.classList.remove(
         "hidden"
     );
+
 }
+
 
 /* ==========================================
    ONLINE USERS / PRESENCE
@@ -354,12 +1067,19 @@ async function loadActivePDF() {
 
 function startPresence() {
 
+    if (!currentProfile) {
+        return;
+    }
+
+
     if (presenceChannel) {
 
         supabaseClient.removeChannel(
             presenceChannel
         );
+
     }
+
 
     presenceChannel =
         supabaseClient.channel(
@@ -367,7 +1087,8 @@ function startPresence() {
             {
                 config: {
                     presence: {
-                        key: userSessionId
+                        key:
+                            userSessionId
                     }
                 }
             }
@@ -382,6 +1103,7 @@ function startPresence() {
         () => {
 
             updateOnlineCount();
+
         }
     );
 
@@ -394,6 +1116,7 @@ function startPresence() {
         () => {
 
             updateOnlineCount();
+
         }
     );
 
@@ -406,6 +1129,7 @@ function startPresence() {
         () => {
 
             updateOnlineCount();
+
         }
     );
 
@@ -421,16 +1145,27 @@ function startPresence() {
                 await presenceChannel.track(
                     {
                         username:
-                            currentUsername
+                            currentProfile.username,
+
+                        user_id:
+                            currentProfile.id
                     }
                 );
 
+
                 updateOnlineCount();
+
             }
+
         }
     );
+
 }
 
+
+/* ==========================================
+   UPDATE ONLINE COUNT
+========================================== */
 
 function updateOnlineCount() {
 
@@ -438,33 +1173,42 @@ function updateOnlineCount() {
         return;
     }
 
+
     const state =
         presenceChannel.presenceState();
+
 
     const uniqueUsers =
         new Set();
 
-    Object.values(state).forEach(
-        (entries) => {
 
-            entries.forEach(
-                (entry) => {
+    Object.values(state)
+        .forEach(
+            (entries) => {
 
-                    if (
-                        entry.username
-                    ) {
+                entries.forEach(
+                    (entry) => {
 
-                        uniqueUsers.add(
+                        if (
                             entry.username
-                        );
+                        ) {
+
+                            uniqueUsers.add(
+                                entry.username
+                            );
+
+                        }
+
                     }
-                }
-            );
-        }
-    );
+                );
+
+            }
+        );
+
 
     const count =
         uniqueUsers.size;
+
 
     onlineCount.textContent =
         `${count} ${
@@ -472,58 +1216,7 @@ function updateOnlineCount() {
                 ? "user"
                 : "users"
         } online`;
-}
 
-
-/* ==========================================
-   HEARTBEAT
-========================================== */
-
-function startHeartbeat() {
-
-    stopHeartbeat();
-
-    heartbeatTimer =
-        setInterval(
-            async () => {
-
-                if (!currentUsername) {
-                    return;
-                }
-
-                const { error } =
-                    await supabaseClient.rpc(
-                        "update_user_presence",
-                        {
-                            requested_session:
-                                userSessionId
-                        }
-                    );
-
-                if (error) {
-
-                    console.error(
-                        "Heartbeat error:",
-                        error
-                    );
-                }
-
-            },
-            15000
-        );
-}
-
-
-function stopHeartbeat() {
-
-    if (heartbeatTimer) {
-
-        clearInterval(
-            heartbeatTimer
-        );
-
-        heartbeatTimer = null;
-    }
 }
 
 
@@ -537,32 +1230,49 @@ messageForm.addEventListener(
 
         event.preventDefault();
 
+
+        if (!currentUser) {
+
+            openLogin();
+
+            return;
+        }
+
+
         const text =
             messageInput.value;
 
+
         if (
-            !text.trim() ||
-            !currentUsername
+            !text.trim()
         ) {
 
             return;
         }
 
-        sendButton.disabled = true;
 
-        const { error } =
+        sendButton.disabled =
+            true;
+
+
+        const {
+            error
+        } =
             await supabaseClient
                 .from("messages")
-                .insert({
-                    username:
-                        currentUsername,
+                .insert(
+                    {
+                        username:
+                            currentProfile.username,
 
-                    message:
-                        text,
+                        message:
+                            text,
 
-                    is_code:
-                        isCodeMode
-                });
+                        is_code:
+                            isCodeMode
+                    }
+                );
+
 
         if (error) {
 
@@ -570,6 +1280,7 @@ messageForm.addEventListener(
                 "Send message error:",
                 error
             );
+
 
             alert(
                 "Message could not be sent."
@@ -582,9 +1293,13 @@ messageForm.addEventListener(
             autoResizeTextarea();
 
             messageInput.focus();
+
         }
 
-        sendButton.disabled = false;
+
+        sendButton.disabled =
+            false;
+
     }
 );
 
@@ -597,11 +1312,13 @@ messageInput.addEventListener(
     "keydown",
     (event) => {
 
+
         /*
          * Normal mode:
+         *
          * Enter = send
          *
-         * Shift + Enter:
+         * Shift + Enter =
          * new line
          */
 
@@ -614,11 +1331,13 @@ messageInput.addEventListener(
             event.preventDefault();
 
             messageForm.requestSubmit();
+
         }
 
 
         /*
          * Code mode:
+         *
          * Enter = new line
          *
          * Ctrl + Enter = send
@@ -633,7 +1352,9 @@ messageInput.addEventListener(
             event.preventDefault();
 
             messageForm.requestSubmit();
+
         }
+
     }
 );
 
@@ -646,8 +1367,18 @@ codeButton.addEventListener(
     "click",
     () => {
 
+
+        if (!currentUser) {
+
+            openLogin();
+
+            return;
+        }
+
+
         isCodeMode =
             !isCodeMode;
+
 
         if (isCodeMode) {
 
@@ -655,28 +1386,38 @@ codeButton.addEventListener(
                 "active"
             );
 
+
             codeIndicator.classList.remove(
                 "hidden"
             );
 
+
             messageInput.placeholder =
                 "Write your code here...";
 
-        } else {
+        }
+
+
+        else {
 
             codeButton.classList.remove(
                 "active"
             );
 
+
             codeIndicator.classList.add(
                 "hidden"
             );
 
+
             messageInput.placeholder =
                 "Type a message...";
+
         }
 
+
         messageInput.focus();
+
     }
 );
 
@@ -691,10 +1432,12 @@ function addMessage(message) {
         return;
     }
 
+
     const expires =
         new Date(
             message.expires_at
         );
+
 
     if (
         Number.isNaN(
@@ -725,21 +1468,25 @@ function addMessage(message) {
             "article"
         );
 
+
     messageElement.className =
         "message";
+
 
     messageElement.dataset.messageId =
         message.id;
 
 
     if (
+        currentProfile &&
         message.username ===
-        currentUsername
+        currentProfile.username
     ) {
 
         messageElement.classList.add(
             "mine"
         );
+
     }
 
 
@@ -753,10 +1500,12 @@ function addMessage(message) {
             "code-message"
         );
 
+
         const codeHeader =
             document.createElement(
                 "div"
             );
+
 
         codeHeader.className =
             "code-header";
@@ -766,6 +1515,7 @@ function addMessage(message) {
             document.createElement(
                 "span"
             );
+
 
         codeAuthor.textContent =
             `${message.username} • ${formatTime(
@@ -784,6 +1534,7 @@ function addMessage(message) {
             codeAuthor
         );
 
+
         codeHeader.appendChild(
             copyButton
         );
@@ -794,8 +1545,10 @@ function addMessage(message) {
                 "pre"
             );
 
+
         codeContent.className =
             "code-content";
+
 
         codeContent.textContent =
             message.message;
@@ -805,21 +1558,25 @@ function addMessage(message) {
             codeHeader
         );
 
+
         messageElement.appendChild(
             codeContent
         );
+
+    }
 
 
     /*
      * NORMAL MESSAGE
      */
 
-    } else {
+    else {
 
         const header =
             document.createElement(
                 "div"
             );
+
 
         header.className =
             "message-header";
@@ -830,8 +1587,10 @@ function addMessage(message) {
                 "span"
             );
 
+
         username.className =
             "message-user";
+
 
         username.textContent =
             message.username;
@@ -842,8 +1601,10 @@ function addMessage(message) {
                 "span"
             );
 
+
         time.className =
             "message-time";
+
 
         time.textContent =
             formatTime(
@@ -855,6 +1616,7 @@ function addMessage(message) {
             username
         );
 
+
         header.appendChild(
             time
         );
@@ -865,11 +1627,14 @@ function addMessage(message) {
                 "div"
             );
 
+
         text.className =
             "message-text";
 
+
         text.textContent =
             message.message;
+
 
         linkify(text);
 
@@ -878,6 +1643,7 @@ function addMessage(message) {
             document.createElement(
                 "div"
             );
+
 
         actions.className =
             "message-actions";
@@ -899,13 +1665,16 @@ function addMessage(message) {
             header
         );
 
+
         messageElement.appendChild(
             text
         );
 
+
         messageElement.appendChild(
             actions
         );
+
     }
 
 
@@ -915,7 +1684,7 @@ function addMessage(message) {
 
 
     /*
-     * Remove from UI when its
+     * Remove message when its
      * 5-minute lifetime ends.
      */
 
@@ -931,6 +1700,7 @@ function addMessage(message) {
 
                 messageElement.remove();
 
+
                 if (
                     messagesContainer
                         .children
@@ -938,12 +1708,15 @@ function addMessage(message) {
                 ) {
 
                     showEmptyState();
+
                 }
 
             },
             remaining
         );
+
     }
+
 }
 
 
@@ -961,10 +1734,14 @@ function createCopyButton(
             "button"
         );
 
-    button.type = "button";
+
+    button.type =
+        "button";
+
 
     button.className =
         "copy-button";
+
 
     button.textContent =
         label;
@@ -980,8 +1757,10 @@ function createCopyButton(
                     text
                 );
 
+
                 button.textContent =
                     "Copied!";
+
 
                 setTimeout(
                     () => {
@@ -993,6 +1772,7 @@ function createCopyButton(
                     1200
                 );
 
+
             } catch (error) {
 
                 console.error(
@@ -1000,14 +1780,18 @@ function createCopyButton(
                     error
                 );
 
+
                 button.textContent =
                     "Copy failed";
+
             }
+
         }
     );
 
 
     return button;
+
 }
 
 
@@ -1020,13 +1804,19 @@ function linkify(element) {
     const text =
         element.textContent;
 
+
     const urlRegex =
         /(https?:\/\/[^\s]+)/g;
 
-    const parts =
-        text.split(urlRegex);
 
-    element.textContent = "";
+    const parts =
+        text.split(
+            urlRegex
+        );
+
+
+    element.textContent =
+        "";
 
 
     parts.forEach(
@@ -1043,32 +1833,43 @@ function linkify(element) {
                         "a"
                     );
 
+
                 link.href =
                     part;
+
 
                 link.textContent =
                     part;
 
+
                 link.target =
                     "_blank";
 
+
                 link.rel =
                     "noopener noreferrer";
+
 
                 element.appendChild(
                     link
                 );
 
-            } else {
+            }
+
+
+            else {
 
                 element.appendChild(
                     document.createTextNode(
                         part
                     )
                 );
+
             }
+
         }
     );
+
 }
 
 
@@ -1086,6 +1887,7 @@ function formatTime(timestamp) {
                 minute: "2-digit"
             }
         );
+
 }
 
 
@@ -1110,6 +1912,7 @@ function showEmptyState() {
             "div"
         );
 
+
     empty.className =
         "empty-state";
 
@@ -1118,6 +1921,7 @@ function showEmptyState() {
         document.createElement(
             "strong"
         );
+
 
     title.textContent =
         "No messages yet";
@@ -1133,6 +1937,7 @@ function showEmptyState() {
         title
     );
 
+
     empty.appendChild(
         subtitle
     );
@@ -1141,6 +1946,7 @@ function showEmptyState() {
     messagesContainer.appendChild(
         empty
     );
+
 }
 
 
@@ -1151,9 +1957,11 @@ function removeEmptyState() {
             ".empty-state"
         );
 
+
     if (empty) {
         empty.remove();
     }
+
 }
 
 
@@ -1163,8 +1971,13 @@ function removeEmptyState() {
 
 function setStatus(status) {
 
-    connectionStatus.textContent =
-        status;
+    if (connectionStatus) {
+
+        connectionStatus.textContent =
+            status;
+
+    }
+
 }
 
 
@@ -1180,14 +1993,21 @@ messageInput.addEventListener(
 
 function autoResizeTextarea() {
 
+    if (!messageInput) {
+        return;
+    }
+
+
     messageInput.style.height =
         "auto";
+
 
     messageInput.style.height =
         Math.min(
             messageInput.scrollHeight,
             220
         ) + "px";
+
 }
 
 
@@ -1197,37 +2017,26 @@ function autoResizeTextarea() {
 
 function scrollToBottom() {
 
+    if (!messagesContainer) {
+        return;
+    }
+
+
     messagesContainer.scrollTop =
         messagesContainer.scrollHeight;
+
 }
 
 
 /* ==========================================
-   LEAVE
+   SIGN OUT
 ========================================== */
 
 async function leaveChat() {
 
-    stopHeartbeat();
-
-
-    try {
-
-        await supabaseClient.rpc(
-            "release_username",
-            {
-                requested_session:
-                    userSessionId
-            }
-        );
-
-    } catch (error) {
-
-        console.error(
-            "Release username error:",
-            error
-        );
-    }
+    console.log(
+        "Signing out..."
+    );
 
 
     if (presenceChannel) {
@@ -1242,6 +2051,7 @@ async function leaveChat() {
                 "Presence untrack error:",
                 error
             );
+
         }
 
 
@@ -1249,7 +2059,9 @@ async function leaveChat() {
             presenceChannel
         );
 
+
         presenceChannel = null;
+
     }
 
 
@@ -1259,69 +2071,145 @@ async function leaveChat() {
             realtimeChannel
         );
 
+
         realtimeChannel = null;
+
     }
 
 
-    currentUsername = "";
+    await supabaseClient.auth.signOut();
 
-    messagesContainer.innerHTML = "";
+}
 
-    chatScreen.classList.add(
-        "hidden"
+
+if (leaveButton) {
+
+    leaveButton.addEventListener(
+        "click",
+        leaveChat
     );
 
-    joinScreen.classList.remove(
-        "hidden"
-    );
+}
 
-    usernameInput.value = "";
 
-    usernameError.textContent = "";
+/* ==========================================
+   RESET AFTER SIGN OUT
+========================================== */
 
-    messageInput.value = "";
+async function resetLabChat() {
+
+    currentUser = null;
+
+    currentProfile = null;
+
 
     isCodeMode = false;
 
-    codeButton.classList.remove(
-        "active"
-    );
 
-    codeIndicator.classList.add(
-        "hidden"
-    );
+    if (currentUserElement) {
 
-    messageInput.placeholder =
-        "Type a message...";
+        currentUserElement.textContent =
+            "Guest";
+
+    }
+
+
+    if (loginNotice) {
+
+        loginNotice.classList.remove(
+            "hidden"
+        );
+
+    }
+
+
+    if (messagesContainer) {
+
+        messagesContainer.innerHTML =
+            "";
+
+    }
+
+
+    if (pdfSection) {
+
+        pdfSection.classList.add(
+            "hidden"
+        );
+
+    }
+
+
+    if (codeButton) {
+
+        codeButton.classList.remove(
+            "active"
+        );
+
+    }
+
+
+    if (codeIndicator) {
+
+        codeIndicator.classList.add(
+            "hidden"
+        );
+
+    }
+
+
+    if (messageInput) {
+
+        messageInput.value =
+            "";
+
+        messageInput.placeholder =
+            "Login to send a message...";
+
+    }
+
 
     onlineCount.textContent =
         "0 online";
 
-    autoResizeTextarea();
+
+    disableChatControls();
+
+
+    setStatus(
+        "Signed out"
+    );
+
+
+    openLogin();
+
 }
 
 
-leaveButton.addEventListener(
-    "click",
-    leaveChat
-);
-
-
 /* ==========================================
-   CLEANUP WHEN TAB CLOSES
+   PAGE CLEANUP
 ========================================== */
 
 window.addEventListener(
     "beforeunload",
     () => {
 
-        /*
-         * Best-effort cleanup.
-         * The heartbeat + 45-second
-         * expiration protects against
-         * crashed/closed tabs.
-         */
+        if (presenceChannel) {
 
-        stopHeartbeat();
+            try {
+
+                presenceChannel.untrack();
+
+            } catch (error) {
+
+                console.error(
+                    "Presence cleanup error:",
+                    error
+                );
+
+            }
+
+        }
+
     }
 );
