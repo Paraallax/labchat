@@ -877,4 +877,116 @@ button {
     #sendButton {
         font-size: 12px;
     }
+
+}
+
+/* =========================
+   PDF DOCUMENT
+========================= */
+
+.pdf-section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    gap: 15px;
+
+    margin: 12px 20px 0;
+    padding: 12px 15px;
+
+    background: var(--surface);
+
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.pdf-info {
+    display: flex;
+    align-items: center;
+
+    gap: 12px;
+
+    min-width: 0;
+}
+
+.pdf-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 42px;
+    height: 42px;
+
+    flex-shrink: 0;
+
+    border-radius: 9px;
+
+    background: var(--accent);
+
+    color: white;
+
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.pdf-details {
+    display: flex;
+    flex-direction: column;
+
+    gap: 3px;
+
+    min-width: 0;
+}
+
+.pdf-details strong {
+    font-size: 13px;
+
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.pdf-details span {
+    color: var(--muted);
+
+    font-size: 11px;
+}
+
+.pdf-button {
+    flex-shrink: 0;
+
+    padding: 8px 13px;
+
+    border-radius: 8px;
+
+    background: var(--accent);
+
+    color: white;
+
+    font-size: 12px;
+    font-weight: 700;
+
+    text-decoration: none;
+
+    transition: 0.2s;
+}
+
+.pdf-button:hover {
+    background: var(--accent-hover);
+}
+
+@media (max-width: 600px) {
+
+    .pdf-section {
+        margin: 10px 10px 0;
+        padding: 10px;
+    }
+
+    .pdf-details strong {
+        max-width: 180px;
+    }
+
+    .pdf-button {
+        padding: 8px 10px;
+    }
 }
