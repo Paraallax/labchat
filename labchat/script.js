@@ -74,6 +74,18 @@ const codeIndicator =
 const leaveButton =
     document.getElementById("leaveButton");
 
+const pdfSection =
+    document.getElementById("pdfSection");
+
+const pdfTitle =
+    document.getElementById("pdfTitle");
+
+const pdfStatus =
+    document.getElementById("pdfStatus");
+
+const pdfButton =
+    document.getElementById("pdfButton");
+
 
 /* ==========================================
    JOIN
