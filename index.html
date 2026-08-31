@@ -1,392 +1,59 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>LabChat</title>
 
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
-
+    <link rel="stylesheet" href="style.css">
 </head>
-
 
 <body>
 
+    <!-- LOGIN SCREEN -->
+    <div id="loginScreen" class="screen">
 
-<!-- =====================================================
-     LOGIN OVERLAY
-===================================================== -->
+        <div class="login-box">
 
-<div
-    id="loginOverlay"
-    class="login-overlay hidden"
->
+            <h1>LabChat</h1>
 
-    <div
-        id="loginModal"
-        class="login-modal"
-    >
+            <p>Enter your username to continue</p>
 
-        <button
-            id="closeLoginButton"
-            class="login-close"
-            type="button"
-            aria-label="Close login"
-        >
-            ×
-        </button>
-
-
-        <!-- LOGIN LOGO -->
-
-        <div class="login-logo">
-            LC
-        </div>
-
-
-        <h1>
-            LabChat Login
-        </h1>
-
-
-        <p class="login-subtitle">
-            Sign in to continue
-        </p>
-
-
-        <!-- LOGIN FORM -->
-
-        <form id="loginForm">
-
-
-            <!-- EMAIL / ID -->
-
-            <div class="login-field">
-
-                <label for="loginIdentifier">
-                    Email / ID
-                </label>
+            <form id="loginForm">
 
                 <input
-                    id="loginIdentifier"
                     type="text"
-                    placeholder="Enter your email or ID"
-                    autocomplete="username"
+                    id="username"
+                    placeholder="Enter username"
+                    autocomplete="off"
                     required
                 >
 
-            </div>
+                <button type="submit">
+                    Login
+                </button>
 
-
-            <!-- PASSWORD -->
-
-            <div class="login-field">
-
-                <label for="loginPassword">
-                    Password
-                </label>
-
-                <input
-                    id="loginPassword"
-                    type="password"
-                    placeholder="Enter your password"
-                    autocomplete="current-password"
-                    required
-                >
-
-            </div>
-
-
-            <!-- LOGIN ERROR -->
-
-            <p
-                id="loginError"
-                class="login-error"
-            ></p>
-
-
-            <!-- LOGIN BUTTON -->
-
-            <button
-                id="loginButton"
-                class="login-submit"
-                type="submit"
-            >
-                Login
-            </button>
-
-
-        </form>
-
-
-        <p class="login-hint">
-            Press
-            <strong>Ctrl + Shift + L</strong>
-            to open login.
-        </p>
-
-    </div>
-
-</div>
-
-
-
-<!-- =====================================================
-     LABCHAT APPLICATION
-===================================================== -->
-
-<section
-    id="chatScreen"
-    class="chat-screen"
->
-
-
-    <!-- =================================================
-         TOP BAR
-    ================================================== -->
-
-    <header class="topbar">
-
-
-        <!-- BRAND -->
-
-        <div class="brand">
-
-            <div class="small-logo">
-                LC
-            </div>
-
-            <div>
-
-                <h2>
-                    LabChat
-                </h2>
-
-                <span id="connectionStatus">
-                    Connecting...
-                </span>
-
-            </div>
+            </form>
 
         </div>
-
-
-
-        <!-- ONLINE USERS -->
-
-        <div class="online-info">
-
-            <span class="online-dot"></span>
-
-            <span id="onlineCount">
-                0 online
-            </span>
-
-        </div>
-
-
-
-        <!-- USER -->
-
-        <div class="user-info">
-
-            <span id="currentUser">
-                Guest
-            </span>
-
-            <button
-                id="leaveButton"
-                class="leave-button"
-                type="button"
-            >
-                Sign Out
-            </button>
-
-        </div>
-
-
-    </header>
-
-
-
-    <!-- =================================================
-         LOGIN STATUS
-    ================================================== -->
-
-    <div
-        id="loginNotice"
-        class="login-notice"
-    >
-
-        <span>
-            You are not signed in.
-        </span>
-
-        <button
-            id="openLoginButton"
-            type="button"
-        >
-            Login
-        </button>
 
     </div>
 
 
+    <!-- IMAGE SCREEN -->
+    <div id="imageScreen" class="image-screen hidden">
 
-    <!-- =================================================
-         PDF DOCUMENT
-    ================================================== -->
-
-    <section
-        id="pdfSection"
-        class="pdf-section hidden"
-    >
-
-
-        <div class="pdf-info">
-
-
-            <div class="pdf-icon">
-                PDF
-            </div>
-
-
-            <div class="pdf-details">
-
-                <strong id="pdfTitle">
-                    Lab PDF
-                </strong>
-
-                <span id="pdfStatus">
-                    Loading PDF...
-                </span>
-
-            </div>
-
-
-        </div>
-
-
-
-        <a
-            id="pdfButton"
-            class="pdf-button"
-            href="#"
-            target="_blank"
-            rel="noopener noreferrer"
+        <img
+            id="displayImage"
+            src=""
+            alt="LabChat Image"
         >
-            Open PDF
-        </a>
+
+    </div>
 
 
-    </section>
-
-
-
-    <!-- =================================================
-         MESSAGES
-    ================================================== -->
-
-    <main
-        id="messages"
-        class="messages"
-        aria-live="polite"
-    >
-
-    </main>
-
-
-
-    <!-- =================================================
-         MESSAGE FORM
-    ================================================== -->
-
-    <form
-        id="messageForm"
-        class="message-form"
-    >
-
-
-        <div class="input-area">
-
-
-            <div
-                id="codeIndicator"
-                class="code-indicator hidden"
-            >
-                CODE MODE
-            </div>
-
-
-            <textarea
-                id="messageInput"
-                maxlength="10000"
-                placeholder="Login to send a message..."
-                autocomplete="off"
-                rows="1"
-                disabled
-            ></textarea>
-
-
-        </div>
-
-
-
-        <!-- CODE BUTTON -->
-
-        <button
-            type="button"
-            id="codeButton"
-            class="tool-button"
-            disabled
-        >
-            &lt;/&gt; Code
-        </button>
-
-
-
-        <!-- SEND -->
-
-        <button
-            type="submit"
-            id="sendButton"
-            disabled
-        >
-            Send
-        </button>
-
-
-    </form>
-
-
-</section>
-
-
-
-<!-- =====================================================
-     SUPABASE
-===================================================== -->
-
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-
-
-<!-- =====================================================
-     LABCHAT JAVASCRIPT
-===================================================== -->
-
-<script src="script.js"></script>
-
+    <script src="script.js"></script>
 
 </body>
 </html>
